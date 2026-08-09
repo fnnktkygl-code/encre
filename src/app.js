@@ -8,7 +8,9 @@ import {
   applyToPolygon,
   dabLine,
   pushHistory,
-  triggerHaptic
+  triggerHaptic,
+  getHandleAtPoint,
+  drawInteractiveShape
 } from './canvas.js';
 import { setupGestures } from './gestures.js';
 import { initPWA } from './pwa.js';
@@ -26,7 +28,11 @@ import { initPWA } from './pwa.js';
     pixelSize: 14,
     brushSize: 46,
     jpegQuality: 92,
-    zoom: 1
+    zoom: 1,
+    activeShape: null, // { type, x, y, w, h, mode, color, blurRadius, pixelSize }
+    dragHandle: null,  // 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'body'
+    dragStartPt: null,
+    initialShapeBounds: null
   };
 
   // Element references
@@ -52,6 +58,7 @@ import { initPWA } from './pwa.js';
   const overlayCtx = overlay.getContext('2d');
 
   let gestureHandler = null;
+  let actionContainer = null;
 
   // Helpers
   function getRecord(id) {
@@ -71,6 +78,97 @@ import { initPWA } from './pwa.js';
     overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
   }
 
+  // Floating Action Bar for Interactive Shape Confirmation
+  function createActionBar() {
+    if (actionContainer) return;
+    actionContainer = document.createElement('div');
+    actionContainer.className = 'shape-action-bar hidden';
+    actionContainer.innerHTML = `
+      <button class="confirm-btn" id="shape-confirm-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Valider
+      </button>
+      <button class="cancel-btn" id="shape-cancel-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        Annuler
+      </button>
+    `;
+    canvasStage.appendChild(actionContainer);
+
+    document.getElementById('shape-confirm-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      commitActiveShape();
+    });
+    document.getElementById('shape-cancel-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      discardActiveShape();
+    });
+  }
+
+  function updateActionBarPosition() {
+    if (!state.activeShape || !actionContainer) {
+      if (actionContainer) actionContainer.classList.add('hidden');
+      return;
+    }
+    actionContainer.classList.remove('hidden');
+
+    const shape = state.activeShape;
+    const stageRect = canvasStage.getBoundingClientRect();
+    const innerRect = canvasInner.getBoundingClientRect();
+
+    const scaleX = innerRect.width / overlay.width;
+    const scaleY = innerRect.height / overlay.height;
+
+    const topCenterX = innerRect.left - stageRect.left + (shape.x + shape.w / 2) * scaleX;
+    const topY = innerRect.top - stageRect.top + shape.y * scaleY;
+
+    actionContainer.style.left = `${topCenterX}px`;
+    actionContainer.style.top = `${topY}px`;
+  }
+
+  function redrawOverlay() {
+    clearOverlay();
+    if (state.activeShape) {
+      const rec = activeRecord();
+      drawInteractiveShape(overlayCtx, rec ? rec.canvas : workCanvas, state.activeShape, state.zoom);
+    }
+    updateActionBarPosition();
+  }
+
+  function commitActiveShape() {
+    if (!state.activeShape) return;
+    const rec = activeRecord();
+    if (!rec) return;
+
+    const snapshot = cloneCanvas(workCanvas);
+    pushHistory(rec, snapshot);
+
+    const { type, x, y, w, h, mode, color, blurRadius, pixelSize } = state.activeShape;
+    const params = { color, blurRadius, pixelSize };
+
+    if (type === 'rect') {
+      applyToClippedRect(workCanvas, snapshot, x, y, w, h, mode, params);
+    } else if (type === 'oval') {
+      applyToClippedOval(workCanvas, snapshot, x + w / 2, y + h / 2, w / 2, h / 2, mode, params);
+    }
+
+    syncRecordFromCanvas(rec);
+    refreshUndoRedoButtons();
+    triggerHaptic();
+
+    state.activeShape = null;
+    state.dragHandle = null;
+    clearOverlay();
+    updateActionBarPosition();
+  }
+
+  function discardActiveShape() {
+    state.activeShape = null;
+    state.dragHandle = null;
+    clearOverlay();
+    updateActionBarPosition();
+  }
+
   // History & Undo / Redo
   function syncRecordFromCanvas(rec) {
     rec.canvas = cloneCanvas(workCanvas);
@@ -82,6 +180,7 @@ import { initPWA } from './pwa.js';
     redoBtn.disabled = !rec || rec.redoStack.length === 0;
   }
   function undo() {
+    if (state.activeShape) commitActiveShape();
     const rec = activeRecord();
     if (!rec || rec.undoStack.length === 0) return;
     const prev = rec.undoStack.pop();
@@ -93,6 +192,7 @@ import { initPWA } from './pwa.js';
     triggerHaptic();
   }
   function redo() {
+    if (state.activeShape) commitActiveShape();
     const rec = activeRecord();
     if (!rec || rec.redoStack.length === 0) return;
     const next = rec.redoStack.pop();
@@ -107,6 +207,7 @@ import { initPWA } from './pwa.js';
     const rec = activeRecord();
     if (!rec) return;
     if (!window.confirm("Réinitialiser cette image à sa version originale ? (Action annulable avec Annuler)")) return;
+    discardActiveShape();
     pushHistory(rec, cloneCanvas(workCanvas));
     workCtx.clearRect(0, 0, workCanvas.width, workCanvas.height);
     workCtx.drawImage(rec.originalCanvas, 0, 0);
@@ -226,6 +327,7 @@ import { initPWA } from './pwa.js';
 
   // Active Image Switching
   function setActiveImage(id) {
+    if (state.activeShape) commitActiveShape();
     if (state.activeId && state.activeId !== id) {
       const prev = getRecord(state.activeId);
       if (prev) prev.canvas = cloneCanvas(workCanvas);
@@ -258,13 +360,14 @@ import { initPWA } from './pwa.js';
     state.zoom = Math.min(5, Math.max(0.1, z));
     canvasInner.style.transform = `scale(${state.zoom})`;
     zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
+    updateActionBarPosition();
   }
   function zoomBy(delta) { setZoom(state.zoom + delta); }
   function fitToScreen() {
     const rec = activeRecord();
     if (!rec) return;
     const stageRect = canvasStage.getBoundingClientRect();
-    const pad = 60;
+    const pad = 40;
     const scaleX = (stageRect.width - pad) / rec.width;
     const scaleY = (stageRect.height - pad) / rec.height;
     const s = Math.min(scaleX, scaleY);
@@ -273,6 +376,7 @@ import { initPWA } from './pwa.js';
 
   // Tool & Mode Selection UI
   function setTool(name) {
+    if (state.activeShape) commitActiveShape();
     state.tool = name;
     document.querySelectorAll('[data-tool]').forEach(b => {
       b.classList.toggle('active', b.dataset.tool === name);
@@ -288,6 +392,10 @@ import { initPWA } from './pwa.js';
     document.getElementById('color-field').style.display = name === 'redact' ? '' : 'none';
     document.getElementById('blur-field').style.display = name === 'blur' ? '' : 'none';
     document.getElementById('pixel-field').style.display = name === 'pixelate' ? '' : 'none';
+    if (state.activeShape) {
+      state.activeShape.mode = name;
+      redrawOverlay();
+    }
   }
 
   document.querySelectorAll('[data-tool]').forEach(b => {
@@ -297,14 +405,19 @@ import { initPWA } from './pwa.js';
     b.addEventListener('click', () => setMode(b.dataset.mode));
   });
 
-  document.getElementById('color-input').addEventListener('input', (e) => { state.color = e.target.value; });
+  document.getElementById('color-input').addEventListener('input', (e) => {
+    state.color = e.target.value;
+    if (state.activeShape) { state.activeShape.color = state.color; redrawOverlay(); }
+  });
   document.getElementById('blur-range').addEventListener('input', (e) => {
     state.blurRadius = parseInt(e.target.value, 10);
     document.getElementById('blur-val').textContent = state.blurRadius;
+    if (state.activeShape) { state.activeShape.blurRadius = state.blurRadius; redrawOverlay(); }
   });
   document.getElementById('pixel-range').addEventListener('input', (e) => {
     state.pixelSize = parseInt(e.target.value, 10);
     document.getElementById('pixel-val').textContent = state.pixelSize;
+    if (state.activeShape) { state.activeShape.pixelSize = state.pixelSize; redrawOverlay(); }
   });
   document.getElementById('brush-range').addEventListener('input', (e) => {
     state.brushSize = parseInt(e.target.value, 10);
@@ -330,72 +443,34 @@ import { initPWA } from './pwa.js';
   function showOriginal() {
     const rec = activeRecord();
     if (!rec) return;
+    clearOverlay();
     overlayCtx.drawImage(rec.originalCanvas, 0, 0);
     originalBadge.classList.add('show');
   }
   function hideOriginal() {
     clearOverlay();
     originalBadge.classList.remove('show');
+    if (state.activeShape) redrawOverlay();
   }
   beforeAfterBtn.addEventListener('pointerdown', showOriginal);
   beforeAfterBtn.addEventListener('pointerup', hideOriginal);
   beforeAfterBtn.addEventListener('pointerleave', hideOriginal);
   beforeAfterBtn.addEventListener('touchend', hideOriginal);
 
-  // Drawing interactions
+  // Drawing & Interactive Drag/Resize interactions
   let shapeStart = null;
   let lassoPoints = null;
   let brushActive = false;
   let lastPoint = null;
   let preOpSnapshot = null;
 
-  function overlayLineWidth() { return Math.max(1, 2 / state.zoom); }
-  function overlayDash() { const d = Math.max(3, 6 / state.zoom); return [d, d * 0.7]; }
-
-  function drawRectPreview(a, b) {
-    clearOverlay();
-    const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
-    const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
-    overlayCtx.save();
-    overlayCtx.strokeStyle = 'rgba(255,255,255,0.95)';
-    overlayCtx.lineWidth = overlayLineWidth();
-    overlayCtx.setLineDash(overlayDash());
-    overlayCtx.strokeRect(x, y, w, h);
-    overlayCtx.strokeStyle = 'rgba(0,0,0,0.6)';
-    overlayCtx.setLineDash([]);
-    overlayCtx.lineWidth = Math.max(0.5, overlayLineWidth() / 2);
-    overlayCtx.strokeRect(x, y, w, h);
-    overlayCtx.restore();
-  }
-
-  function drawOvalPreview(a, b) {
-    clearOverlay();
-    const cx = (a.x + b.x) / 2;
-    const cy = (a.y + b.y) / 2;
-    const rx = Math.abs(b.x - a.x) / 2;
-    const ry = Math.abs(b.y - a.y) / 2;
-    if (rx < 1 || ry < 1) return;
-    overlayCtx.save();
-    overlayCtx.strokeStyle = 'rgba(255,255,255,0.95)';
-    overlayCtx.lineWidth = overlayLineWidth();
-    overlayCtx.setLineDash(overlayDash());
-    overlayCtx.beginPath();
-    overlayCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    overlayCtx.stroke();
-    overlayCtx.strokeStyle = 'rgba(0,0,0,0.6)';
-    overlayCtx.setLineDash([]);
-    overlayCtx.lineWidth = Math.max(0.5, overlayLineWidth() / 2);
-    overlayCtx.stroke();
-    overlayCtx.restore();
-  }
-
   function drawLassoPreview(points) {
     clearOverlay();
     if (points.length < 2) return;
     overlayCtx.save();
     overlayCtx.strokeStyle = 'rgba(255,255,255,0.95)';
-    overlayCtx.lineWidth = overlayLineWidth();
-    overlayCtx.setLineDash(overlayDash());
+    overlayCtx.lineWidth = Math.max(1, 2 / state.zoom);
+    overlayCtx.setLineDash([Math.max(3, 6 / state.zoom), Math.max(2, 4 / state.zoom)]);
     overlayCtx.beginPath();
     points.forEach((p, i) => { i === 0 ? overlayCtx.moveTo(p.x, p.y) : overlayCtx.lineTo(p.x, p.y); });
     overlayCtx.stroke();
@@ -406,7 +481,7 @@ import { initPWA } from './pwa.js';
     clearOverlay();
     overlayCtx.save();
     overlayCtx.strokeStyle = 'rgba(255,255,255,0.95)';
-    overlayCtx.lineWidth = overlayLineWidth();
+    overlayCtx.lineWidth = Math.max(1, 2 / state.zoom);
     overlayCtx.beginPath();
     overlayCtx.arc(p.x, p.y, state.brushSize / 2, 0, Math.PI * 2);
     overlayCtx.stroke();
@@ -416,12 +491,42 @@ import { initPWA } from './pwa.js';
   overlay.addEventListener('pointerdown', (e) => {
     if (!activeRecord()) return;
     if (gestureHandler && gestureHandler.isMultiTouch()) return;
-    overlay.setPointerCapture(e.pointerId);
     const p = getCanvasPoint(e, overlay);
+
+    // 1. Check if clicking on activeShape handles or body
+    if (state.activeShape) {
+      const handle = getHandleAtPoint(p, state.activeShape, state.zoom);
+      if (handle) {
+        overlay.setPointerCapture(e.pointerId);
+        state.dragHandle = handle;
+        state.dragStartPt = p;
+        state.initialShapeBounds = { ...state.activeShape };
+        return;
+      } else {
+        // Clicked outside active shape -> commit it!
+        commitActiveShape();
+      }
+    }
+
+    // 2. Start drawing new shape / stroke
+    overlay.setPointerCapture(e.pointerId);
 
     if (state.tool === 'rect' || state.tool === 'oval') {
       shapeStart = p;
-      preOpSnapshot = cloneCanvas(workCanvas);
+      state.activeShape = {
+        type: state.tool,
+        x: p.x,
+        y: p.y,
+        w: 0,
+        h: 0,
+        mode: state.mode,
+        color: state.color,
+        blurRadius: state.blurRadius,
+        pixelSize: state.pixelSize
+      };
+      state.dragHandle = 'se'; // dragging bottom-right corner initially
+      state.dragStartPt = p;
+      state.initialShapeBounds = { ...state.activeShape };
     } else if (state.tool === 'lasso') {
       lassoPoints = [p];
       preOpSnapshot = cloneCanvas(workCanvas);
@@ -437,11 +542,35 @@ import { initPWA } from './pwa.js';
     if (gestureHandler && gestureHandler.isMultiTouch()) return;
     const p = getCanvasPoint(e, overlay);
 
-    if (state.tool === 'rect' && shapeStart) {
-      drawRectPreview(shapeStart, p);
-    } else if (state.tool === 'oval' && shapeStart) {
-      drawOvalPreview(shapeStart, p);
-    } else if (state.tool === 'lasso' && lassoPoints) {
+    // Dragging / Resizing active shape
+    if (state.activeShape && state.dragHandle && state.dragStartPt && state.initialShapeBounds) {
+      const dx = p.x - state.dragStartPt.x;
+      const dy = p.y - state.dragStartPt.y;
+      const init = state.initialShapeBounds;
+      const s = state.activeShape;
+
+      if (state.dragHandle === 'body') {
+        s.x = init.x + dx;
+        s.y = init.y + dy;
+      } else {
+        if (state.dragHandle.includes('e')) s.w = Math.max(4, init.w + dx);
+        if (state.dragHandle.includes('s')) s.h = Math.max(4, init.h + dy);
+        if (state.dragHandle.includes('w')) {
+          const newW = Math.max(4, init.w - dx);
+          s.x = init.x + (init.w - newW);
+          s.w = newW;
+        }
+        if (state.dragHandle.includes('n')) {
+          const newH = Math.max(4, init.h - dy);
+          s.y = init.y + (init.h - newH);
+          s.h = newH;
+        }
+      }
+      redrawOverlay();
+      return;
+    }
+
+    if (state.tool === 'lasso' && lassoPoints) {
       const lastLassoPt = lassoPoints[lassoPoints.length - 1];
       if (Math.hypot(p.x - lastLassoPt.x, p.y - lastLassoPt.y) > 2) {
         lassoPoints.push(p);
@@ -456,31 +585,23 @@ import { initPWA } from './pwa.js';
     }
   });
 
-  function finishShape(e) {
-    if (!shapeStart) return;
-    const p = getCanvasPoint(e, overlay);
-    const x = Math.min(shapeStart.x, p.x), y = Math.min(shapeStart.y, p.y);
-    const w = Math.abs(p.x - shapeStart.x), h = Math.abs(p.y - shapeStart.y);
-    clearOverlay();
-    if (w > 2 && h > 2) {
-      const rec = activeRecord();
-      pushHistory(rec, preOpSnapshot);
-      if (state.tool === 'rect') {
-        applyToClippedRect(workCanvas, preOpSnapshot, x, y, w, h, state.mode, currentParams());
-      } else if (state.tool === 'oval') {
-        const cx = (shapeStart.x + p.x) / 2;
-        const cy = (shapeStart.y + p.y) / 2;
-        applyToClippedOval(workCanvas, preOpSnapshot, cx, cy, w / 2, h / 2, state.mode, currentParams());
+  function finishPointer(e) {
+    if (state.dragHandle) {
+      state.dragHandle = null;
+      state.dragStartPt = null;
+      state.initialShapeBounds = null;
+      if (state.activeShape) {
+        if (state.activeShape.w < 6 || state.activeShape.h < 6) {
+          discardActiveShape();
+        } else {
+          redrawOverlay();
+        }
       }
-      syncRecordFromCanvas(rec);
-      refreshUndoRedoButtons();
-      triggerHaptic();
     }
     shapeStart = null;
-    preOpSnapshot = null;
   }
 
-  function finishLasso(e) {
+  function finishLasso() {
     if (state.tool !== 'lasso' || !lassoPoints) return;
     clearOverlay();
     if (lassoPoints.length >= 3) {
@@ -510,16 +631,14 @@ import { initPWA } from './pwa.js';
   }
 
   overlay.addEventListener('pointerup', (e) => {
-    finishShape(e);
-    finishLasso(e);
+    finishPointer(e);
+    finishLasso();
     finishBrush();
   });
   overlay.addEventListener('pointercancel', () => {
     clearOverlay();
     shapeStart = null; lassoPoints = null; brushActive = false; preOpSnapshot = null; lastPoint = null;
-  });
-  overlay.addEventListener('pointerleave', () => {
-    if (!shapeStart && !lassoPoints && !brushActive) clearOverlay();
+    state.dragHandle = null;
   });
 
   // Import: file input, browse, drag & drop, paste
@@ -576,6 +695,7 @@ import { initPWA } from './pwa.js';
   }
 
   document.getElementById('export-btn').addEventListener('click', () => {
+    if (state.activeShape) commitActiveShape();
     const rec = activeRecord();
     if (!rec) return;
     const base = rec.name.replace(/\.[^.]+$/, '');
@@ -583,6 +703,7 @@ import { initPWA } from './pwa.js';
   });
 
   exportAllBtn.addEventListener('click', () => {
+    if (state.activeShape) commitActiveShape();
     const format = formatSelect.value;
     let chain = Promise.resolve();
     state.images.forEach((rec) => {
@@ -614,7 +735,9 @@ import { initPWA } from './pwa.js';
     const tag = e.target && e.target.tagName;
     if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     const k = e.key.toLowerCase();
-    if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+    if (e.key === 'Enter') { if (state.activeShape) commitActiveShape(); }
+    else if (e.key === 'Escape') { if (state.activeShape) discardActiveShape(); }
+    else if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
     else if (k === 'r') { setTool('rect'); }
     else if (k === 'o') { setTool('oval'); }
@@ -624,8 +747,18 @@ import { initPWA } from './pwa.js';
     else if (k === '-' || k === '_') { zoomBy(-0.15); }
   });
 
+  window.addEventListener('resize', () => {
+    if (state.images.length > 0) {
+      fitToScreen();
+      updateActionBarPosition();
+    }
+  });
+
   // Gestures setup
   gestureHandler = setupGestures(canvasStage, canvasInner, () => state.zoom, setZoom);
+
+  // Initialize Action Bar
+  createActionBar();
 
   // Initialize PWA and Web Share Target
   initPWA((sharedFiles) => {

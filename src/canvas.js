@@ -202,6 +202,104 @@ export function dabLine(destCanvas, sourceCanvas, p0, p1, r, mode, params) {
 }
 
 /**
+ * Gets handle coordinates for an interactive shape rectangle (x, y, w, h).
+ */
+export function getHandleCoordinates(shape) {
+  const { x, y, w, h } = shape;
+  const midX = x + w / 2;
+  const midY = y + h / 2;
+  return {
+    nw: { x: x, y: y },
+    n:  { x: midX, y: y },
+    ne: { x: x + w, y: y },
+    e:  { x: x + w, y: midY },
+    se: { x: x + w, y: y + h },
+    s:  { x: midX, y: y + h },
+    sw: { x: x, y: y + h },
+    w:  { x: x, y: midY }
+  };
+}
+
+/**
+ * Returns hit handle name ('nw', 'se', 'body', etc.) for pointer point.
+ */
+export function getHandleAtPoint(pt, shape, zoom) {
+  if (!shape) return null;
+  const handles = getHandleCoordinates(shape);
+  const hitRadius = Math.max(14, 20 / zoom); // Touch friendly hit radius
+
+  for (const [key, hPt] of Object.entries(handles)) {
+    if (Math.hypot(pt.x - hPt.x, pt.y - hPt.y) <= hitRadius) {
+      return key;
+    }
+  }
+
+  // Check body hit
+  if (pt.x >= shape.x && pt.x <= shape.x + shape.w && pt.y >= shape.y && pt.y <= shape.y + shape.h) {
+    return 'body';
+  }
+
+  return null;
+}
+
+/**
+ * Renders an interactive shape (redaction effect preview + bounding box + 8 touch handles).
+ */
+export function drawInteractiveShape(overlayCtx, sourceCanvas, shape, zoom) {
+  if (!shape || shape.w <= 0 || shape.h <= 0) return;
+  const { type, x, y, w, h, mode } = shape;
+
+  // 1. Render live effect onto overlay
+  if (type === 'rect') {
+    applyToClippedRect(overlayCtx.canvas, sourceCanvas, x, y, w, h, mode, shape);
+  } else if (type === 'oval') {
+    applyToClippedOval(overlayCtx.canvas, sourceCanvas, x + w / 2, y + h / 2, w / 2, h / 2, mode, shape);
+  }
+
+  // 2. Render bounding box & handles
+  overlayCtx.save();
+  const lineWidth = Math.max(1.5, 2.5 / zoom);
+  const dashLength = Math.max(4, 7 / zoom);
+
+  overlayCtx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  overlayCtx.lineWidth = lineWidth;
+  overlayCtx.setLineDash([dashLength, dashLength * 0.7]);
+
+  if (type === 'rect') {
+    overlayCtx.strokeRect(x, y, w, h);
+  } else if (type === 'oval') {
+    overlayCtx.beginPath();
+    overlayCtx.ellipse(x + w / 2, y + h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    overlayCtx.stroke();
+  }
+
+  overlayCtx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+  overlayCtx.setLineDash([]);
+  overlayCtx.lineWidth = Math.max(0.5, lineWidth / 2);
+  if (type === 'rect') {
+    overlayCtx.strokeRect(x, y, w, h);
+  } else if (type === 'oval') {
+    overlayCtx.stroke();
+  }
+
+  // 3. Render 8 Touch Handles
+  const handles = getHandleCoordinates(shape);
+  const handleRadius = Math.max(5, 8 / zoom);
+
+  for (const hPt of Object.values(handles)) {
+    overlayCtx.beginPath();
+    overlayCtx.arc(hPt.x, hPt.y, handleRadius, 0, Math.PI * 2);
+    overlayCtx.fillStyle = '#FFFFFF';
+    overlayCtx.fill();
+    overlayCtx.lineWidth = Math.max(1, 2 / zoom);
+    overlayCtx.strokeStyle = '#C1443B';
+    overlayCtx.stroke();
+  }
+
+  overlayCtx.restore();
+}
+
+/**
  * Pushes canvas snapshot to history stack.
  */
 export function pushHistory(rec, snapshot) {
