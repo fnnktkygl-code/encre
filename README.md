@@ -44,6 +44,7 @@ Encre est une **Progressive Web App (PWA)** complète qui s'installe en un clic 
 
 | Raccourcis | Action |
 | :--- | :--- |
+| `M` / `H` | Outil Main / Déplacer la vue |
 | `R` | Sélection Rectangle |
 | `O` | Sélection Oval |
 | `L` | Lasso libre |

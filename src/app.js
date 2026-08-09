@@ -389,6 +389,7 @@ import { initPWA } from './pwa.js';
       b.classList.toggle('active', b.dataset.tool === name);
     });
     document.getElementById('brush-field').style.display = name === 'brush' ? '' : 'none';
+    overlay.style.cursor = name === 'pan' ? 'grab' : 'crosshair';
     clearOverlay();
   }
   function setMode(name) {
@@ -495,9 +496,21 @@ import { initPWA } from './pwa.js';
     overlayCtx.restore();
   }
 
+  let panStartPt = null;
+  let panScrollStart = null;
+
   overlay.addEventListener('pointerdown', (e) => {
     if (!activeRecord()) return;
     if (gestureHandler && gestureHandler.isMultiTouch()) return;
+
+    if (state.tool === 'pan') {
+      overlay.setPointerCapture(e.pointerId);
+      panStartPt = { x: e.clientX, y: e.clientY };
+      panScrollStart = { left: canvasStage.scrollLeft, top: canvasStage.scrollTop };
+      overlay.style.cursor = 'grabbing';
+      return;
+    }
+
     const p = getCanvasPoint(e, overlay);
 
     // 1. Check if clicking on activeShape handles or body
@@ -547,6 +560,15 @@ import { initPWA } from './pwa.js';
 
   overlay.addEventListener('pointermove', (e) => {
     if (gestureHandler && gestureHandler.isMultiTouch()) return;
+
+    if (state.tool === 'pan' && panStartPt && panScrollStart) {
+      const dx = e.clientX - panStartPt.x;
+      const dy = e.clientY - panStartPt.y;
+      canvasStage.scrollLeft = panScrollStart.left - dx;
+      canvasStage.scrollTop = panScrollStart.top - dy;
+      return;
+    }
+
     const p = getCanvasPoint(e, overlay);
 
     // Dragging / Resizing active shape
@@ -593,6 +615,11 @@ import { initPWA } from './pwa.js';
   });
 
   function finishPointer(e) {
+    if (state.tool === 'pan') {
+      panStartPt = null;
+      panScrollStart = null;
+      overlay.style.cursor = 'grab';
+    }
     if (state.dragHandle) {
       state.dragHandle = null;
       state.dragStartPt = null;
@@ -746,6 +773,7 @@ import { initPWA } from './pwa.js';
     else if (e.key === 'Escape') { if (state.activeShape) discardActiveShape(); }
     else if ((e.ctrlKey || e.metaKey) && k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
     else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (k === 'z' && e.shiftKey))) { e.preventDefault(); redo(); }
+    else if (k === 'm' || k === 'h') { setTool('pan'); }
     else if (k === 'r') { setTool('rect'); }
     else if (k === 'o') { setTool('oval'); }
     else if (k === 'l') { setTool('lasso'); }
