@@ -340,10 +340,6 @@ import { initPWA } from './pwa.js';
     workCanvas.height = rec.height;
     overlay.width = rec.width;
     overlay.height = rec.height;
-    workCanvas.style.width = rec.width + 'px';
-    workCanvas.style.height = rec.height + 'px';
-    overlay.style.width = rec.width + 'px';
-    overlay.style.height = rec.height + 'px';
 
     workCtx.clearRect(0, 0, workCanvas.width, workCanvas.height);
     workCtx.drawImage(rec.canvas, 0, 0);
@@ -357,8 +353,19 @@ import { initPWA } from './pwa.js';
 
   // Zoom
   function setZoom(z) {
-    state.zoom = Math.min(5, Math.max(0.1, z));
-    canvasInner.style.transform = `scale(${state.zoom})`;
+    const rec = activeRecord();
+    state.zoom = Math.min(5, Math.max(0.01, z));
+    if (rec) {
+      const displayW = Math.max(1, Math.round(rec.width * state.zoom));
+      const displayH = Math.max(1, Math.round(rec.height * state.zoom));
+      workCanvas.style.width = displayW + 'px';
+      workCanvas.style.height = displayH + 'px';
+      overlay.style.width = displayW + 'px';
+      overlay.style.height = displayH + 'px';
+      canvasInner.style.width = displayW + 'px';
+      canvasInner.style.height = displayH + 'px';
+      canvasInner.style.transform = 'none';
+    }
     zoomLabel.textContent = Math.round(state.zoom * 100) + '%';
     updateActionBarPosition();
   }
@@ -367,11 +374,11 @@ import { initPWA } from './pwa.js';
     const rec = activeRecord();
     if (!rec) return;
     const stageRect = canvasStage.getBoundingClientRect();
-    const pad = 40;
-    const scaleX = (stageRect.width - pad) / rec.width;
-    const scaleY = (stageRect.height - pad) / rec.height;
+    const pad = 32;
+    const scaleX = Math.max(0.01, (stageRect.width - pad) / rec.width);
+    const scaleY = Math.max(0.01, (stageRect.height - pad) / rec.height);
     const s = Math.min(scaleX, scaleY);
-    setZoom(Math.max(0.1, Math.min(3, s)));
+    setZoom(Math.max(0.01, Math.min(3, s)));
   }
 
   // Tool & Mode Selection UI
