@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#121316">
+  <meta name="color-scheme" content="dark light">
+  
+  <!-- PWA Meta Tags -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Encre">
+  
+  <title>Encre — Caviardage &amp; Floutage d'Images 100% Local</title>
+
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect x="1" y="1" width="24" height="24" rx="5" stroke="var(--accent)" stroke-width="1.6"/>
+        <path d="M6 13h14" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M6 8.5h9" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" opacity="0.55"/>
+        <path d="M6 17.5h6" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" opacity="0.55"/>
+      </svg>
+      <div>
+        <div class="brand-name">Encre</div>
+        <div class="brand-tag">Caviardage &amp; floutage d'images</div>
+      </div>
+    </div>
+
+    <div class="stamp" title="L'image ne quitte jamais votre appareil">
+      <span class="dot"></span>100% local — aucun réseau
+    </div>
+
+    <div class="header-actions">
+      <!-- PWA Install Buttons -->
+      <button class="btn primary pwa-install-btn hidden" id="pwa-install-btn" title="Installer l'application sur cet appareil">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <span>Installer</span>
+      </button>
+
+      <button class="btn ghost ios-install-btn hidden" id="ios-install-btn" title="Instructions d'installation sur iOS">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2v10M12 2l-4 4M12 2l4 4"/>
+          <rect x="4" y="12" width="16" height="10" rx="2"/>
+        </svg>
+        <span>Installer</span>
+      </button>
+
+      <button class="icon-btn" id="theme-toggle" title="Changer de thème" aria-label="Changer de thème">
+        <svg id="theme-icon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="main">
+
+    <aside id="sidebar" class="hidden">
+      <button class="side-import-btn" id="side-import-btn" aria-label="Importer une image">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+        Ajouter
+      </button>
+      <div class="thumb-list" id="thumb-list"></div>
+    </aside>
+
+    <div id="stage-col">
+
+      <div id="toolbar" class="hidden">
+        <div class="seg" role="group" aria-label="Outil de sélection">
+          <button data-tool="rect" class="active" title="Rectangle (R)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="6" width="16" height="12" rx="1.5"/></svg>
+            <span>Rect</span>
+          </button>
+          <button data-tool="oval" title="Oval / Cercle (O)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>
+            <span>Oval</span>
+          </button>
+          <button data-tool="lasso" title="Lasso libre (L)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13c0-4 3-8 8-8s7 4 5 7-6 2-6 5 3 3 5 1"/><circle cx="6.5" cy="17.5" r="1.6"/></svg>
+            <span>Lasso</span>
+          </button>
+          <button data-tool="brush" title="Pinceau (B)">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15c-2 0-4 1.5-4 4 3 0 5-1 5-3"/><path d="M9.5 14.5 18 6a2.1 2.1 0 0 1 3 3l-8.5 8.5"/></svg>
+            <span>Pinceau</span>
+          </button>
+        </div>
+
+        <div class="seg" role="group" aria-label="Mode de retouche">
+          <button data-mode="redact" class="active" title="Caviarder">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="9" width="16" height="6" rx="1"/></svg>
+            <span>Caviarder</span>
+          </button>
+          <button data-mode="blur" title="Flouter">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="9" r="1"/><circle cx="13" cy="8" r="1"/><circle cx="17" cy="11" r="1"/><circle cx="7" cy="14" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="16" cy="16" r="1"/></svg>
+            <span>Flouter</span>
+          </button>
+          <button data-mode="pixelate" title="Pixeliser">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="6" height="6"/><rect x="14" y="4" width="6" height="6"/><rect x="4" y="14" width="6" height="6"/><rect x="14" y="14" width="6" height="6"/></svg>
+            <span>Pixeliser</span>
+          </button>
+        </div>
+
+        <div class="field" id="color-field">
+          <label for="color-input">Couleur</label>
+          <input type="color" id="color-input" value="#0a0a0a">
+        </div>
+        <div class="field" id="blur-field" style="display:none;">
+          <label for="blur-range">Flou</label>
+          <input type="range" id="blur-range" min="4" max="45" value="18">
+          <span class="val" id="blur-val">18</span>
+        </div>
+        <div class="field" id="pixel-field" style="display:none;">
+          <label for="pixel-range">Blocs</label>
+          <input type="range" id="pixel-range" min="4" max="60" value="14">
+          <span class="val" id="pixel-val">14</span>
+        </div>
+        <div class="field" id="brush-field" style="display:none;">
+          <label for="brush-range">Taille</label>
+          <input type="range" id="brush-range" min="8" max="160" value="46">
+          <span class="val" id="brush-val">46</span>
+        </div>
+
+        <div class="divider"></div>
+        <button class="btn ghost" id="undo-btn" title="Annuler (Ctrl+Z)" disabled aria-label="Annuler">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+        </button>
+        <button class="btn ghost" id="redo-btn" title="Rétablir (Ctrl+Y)" disabled aria-label="Rétablir">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14 20 9l-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+        </button>
+        <button class="btn ghost" id="reset-btn" title="Réinitialiser l'image">Réinitialiser</button>
+      </div>
+
+      <div id="canvas-stage">
+        <div id="empty-state">
+          <div class="empty-card">
+            <svg width="40" height="40" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <rect x="1" y="1" width="24" height="24" rx="5" stroke="var(--accent)" stroke-width="1.6"/>
+              <path d="M6 13h14" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"/>
+              <path d="M6 8.5h9" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" opacity="0.55"/>
+              <path d="M6 17.5h6" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" opacity="0.55"/>
+            </svg>
+            <h1>Déposez ou choisissez une image</h1>
+            <p>Glissez un fichier ici, collez une image depuis le presse-papier (Ctrl+V), ou cliquez ci-dessous. Visages, données sensibles, textes : caviardez et floutez directement sur votre téléphone ou PC.</p>
+            <button class="btn primary" id="browse-btn">Ouvrir une image</button>
+            <div class="footnote">
+              🔒 <strong>Confidentialité garantie :</strong> Aucun serveur, aucune donnée envoyée. Tout reste sur votre appareil et fonctionne 100% hors-ligne.
+            </div>
+          </div>
+        </div>
+
+        <div id="canvas-inner" style="display:none;">
+          <canvas id="work-canvas"></canvas>
+          <canvas id="overlay-canvas"></canvas>
+          <div class="original-badge" id="original-badge">Aperçu original</div>
+        </div>
+      </div>
+
+      <div id="statusbar" class="hidden">
+        <div class="status-group">
+          <button class="btn ghost" id="zoom-out" title="Zoom arrière">−</button>
+          <span id="zoom-label">100%</span>
+          <button class="btn ghost" id="zoom-in" title="Zoom avant">+</button>
+          <button class="btn ghost" id="zoom-fit" title="Ajuster à l'écran">Ajuster</button>
+          <button class="btn ghost" id="before-after" title="Maintenir pour voir l'original">Avant / Après</button>
+        </div>
+        <div class="status-group">
+          <select id="format-select" title="Format d'export">
+            <option value="png">PNG</option>
+            <option value="jpeg">JPEG</option>
+          </select>
+          <div class="field" id="quality-field" style="display:none;">
+            <label for="quality-range">Qualité</label>
+            <input type="range" id="quality-range" min="40" max="100" value="92">
+            <span class="val" id="quality-val">92</span>
+          </div>
+          <button class="btn" id="export-all-btn" style="display:none;">Tout exporter</button>
+          <button class="btn primary" id="export-btn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>
+            Exporter
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Drop overlay -->
+  <div id="drop-overlay"><span>Déposez l'image pour l'ouvrir</span></div>
+  <input type="file" id="file-input" accept="image/*" multiple hidden>
+
+  <!-- iOS Install Modal -->
+  <div id="ios-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2>Installer Encre sur iOS</h2>
+        <button class="modal-close" id="ios-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>Pour ajouter <strong>Encre</strong> sur l'écran d'accueil de votre iPhone / iPad :</p>
+        <ol class="install-steps">
+          <li>Appuyez sur le bouton <strong>Partager</strong> <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg> dans votre navigateur Safari.</li>
+          <li>Faites défiler vers le bas et sélectionnez <strong>Sur l'écran d'accueil</strong>.</li>
+          <li>Validez en appuyant sur <strong>Ajouter</strong> en haut à droite.</li>
+        </ol>
+        <p class="modal-note">L'application s'exécutera ensuite comme une application native, 100% hors-ligne !</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn primary" id="ios-modal-ok">Compris</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="/src/app.js"></script>
+</body>
+</html>
