@@ -9,6 +9,7 @@ export function initPWA(onSharedFilesReceived) {
       navigator.serviceWorker.register('/sw.js', { scope: '/' })
         .then((reg) => {
           console.log('[Encre] Service Worker registered:', reg.scope);
+          reg.update();
         })
         .catch((err) => {
           console.warn('[Encre] Service Worker registration failed:', err);
