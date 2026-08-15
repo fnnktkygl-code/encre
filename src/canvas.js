@@ -222,11 +222,23 @@ export function getHandleCoordinates(shape) {
 
 /**
  * Returns hit handle name ('nw', 'se', 'body', etc.) for pointer point.
+ * Supports both getHandleAtPoint(pt, shape, zoom) and getHandleAtPoint(x, y, shape, zoom).
  */
-export function getHandleAtPoint(pt, shape, zoom) {
-  if (!shape) return null;
+export function getHandleAtPoint(ptOrX, yOrShape, shapeOrZoom, zoom) {
+  let pt, shape, z;
+  if (typeof ptOrX === 'number') {
+    pt = { x: ptOrX, y: yOrShape };
+    shape = shapeOrZoom;
+    z = zoom || 1;
+  } else {
+    pt = ptOrX;
+    shape = yOrShape;
+    z = shapeOrZoom || 1;
+  }
+  if (!pt || !shape) return null;
+
   const handles = getHandleCoordinates(shape);
-  const hitRadius = Math.max(14, 20 / zoom); // Touch friendly hit radius
+  const hitRadius = Math.max(14, 20 / z); // Touch friendly hit radius
 
   for (const [key, hPt] of Object.entries(handles)) {
     if (Math.hypot(pt.x - hPt.x, pt.y - hPt.y) <= hitRadius) {
@@ -303,9 +315,13 @@ export function drawInteractiveShape(overlayCtx, sourceCanvas, shape, zoom) {
  * Pushes canvas snapshot to history stack.
  */
 export function pushHistory(rec, snapshot) {
-  rec.undoStack.push(snapshot);
-  if (rec.undoStack.length > MAX_HISTORY) {
-    rec.undoStack.shift();
+  if (!rec) return;
+  if (!Array.isArray(rec.history)) {
+    rec.history = [];
+  }
+  rec.history.push(snapshot);
+  if (rec.history.length > MAX_HISTORY) {
+    rec.history.shift();
   }
   rec.redoStack = [];
 }

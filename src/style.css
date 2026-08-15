@@ -541,6 +541,11 @@ aside.hidden {
   display: block;
 }
 
+/* Universal Hidden Utilities */
+.hidden {
+  display: none !important;
+}
+
 /* Shape Floating Action Bar */
 .shape-action-bar {
   position: absolute;
@@ -556,6 +561,10 @@ aside.hidden {
   transform: translate(-50%, -100%);
   margin-top: -12px;
   pointer-events: auto;
+}
+
+.shape-action-bar.hidden {
+  display: none !important;
 }
 
 .shape-action-bar button {

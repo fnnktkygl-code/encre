@@ -3,12 +3,20 @@
 /**
  * Attaches multi-touch gestures (2-finger pinch-to-zoom AND 2-finger panning) to the canvas stage.
  */
-export function setupGestures(stageEl, innerEl, getZoom, setZoom) {
+export function setupGestures(stageEl, innerElOrOptions, maybeGetZoom, maybeSetZoom) {
   let touchStartDist = 0;
   let startZoom = 1;
   let isMultiTouch = false;
   let lastCenterX = 0;
   let lastCenterY = 0;
+
+  const isOptionsObject = innerElOrOptions && typeof innerElOrOptions === 'object' && ('onPinch' in innerElOrOptions || 'onPan' in innerElOrOptions);
+  const options = isOptionsObject ? innerElOrOptions : null;
+
+  const getZoomFn = typeof maybeGetZoom === 'function' ? maybeGetZoom : () => 1;
+  const setZoomFn = typeof maybeSetZoom === 'function' ? maybeSetZoom : () => {};
+
+  if (!stageEl) return { isMultiTouch: () => false };
 
   stageEl.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
@@ -17,7 +25,7 @@ export function setupGestures(stageEl, innerEl, getZoom, setZoom) {
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      startZoom = getZoom();
+      startZoom = getZoomFn();
 
       lastCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
       lastCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
@@ -35,7 +43,11 @@ export function setupGestures(stageEl, innerEl, getZoom, setZoom) {
           e.touches[0].clientY - e.touches[1].clientY
         );
         const scale = currentDist / touchStartDist;
-        setZoom(startZoom * scale);
+        if (options && typeof options.onPinch === 'function') {
+          options.onPinch(scale, lastCenterX, lastCenterY);
+        } else {
+          setZoomFn(startZoom * scale);
+        }
       }
 
       // 2. Pan stage scrolling
@@ -45,8 +57,12 @@ export function setupGestures(stageEl, innerEl, getZoom, setZoom) {
       const dx = currentCenterX - lastCenterX;
       const dy = currentCenterY - lastCenterY;
 
-      stageEl.scrollLeft -= dx;
-      stageEl.scrollTop -= dy;
+      if (options && typeof options.onPan === 'function') {
+        options.onPan(dx, dy);
+      } else {
+        stageEl.scrollLeft -= dx;
+        stageEl.scrollTop -= dy;
+      }
 
       lastCenterX = currentCenterX;
       lastCenterY = currentCenterY;

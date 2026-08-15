@@ -79,22 +79,36 @@ export function initImageApp() {
     actionContainer = document.createElement('div');
     actionContainer.className = 'shape-action-bar hidden';
     actionContainer.innerHTML = `
-      <button class="confirm-btn" id="img-shape-confirm-btn">
+      <button type="button" class="confirm-btn" id="img-shape-confirm-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
         Valider
       </button>
-      <button class="cancel-btn" id="img-shape-cancel-btn">
+      <button type="button" class="cancel-btn" id="img-shape-cancel-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         Annuler
       </button>
     `;
+
+    // Stop events from bubbling to canvasStage so drawing isn't triggered on click
+    actionContainer.addEventListener('pointerdown', (e) => {
+      e.stopPropagation();
+    });
+    actionContainer.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+    });
+    actionContainer.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+    }, { passive: false });
+
     canvasStage.appendChild(actionContainer);
 
     document.getElementById('img-shape-confirm-btn').addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       commitActiveShape();
     });
     document.getElementById('img-shape-cancel-btn').addEventListener('click', (e) => {
+      e.preventDefault();
       e.stopPropagation();
       discardActiveShape();
     });
@@ -146,6 +160,9 @@ export function initImageApp() {
     } else if (type === 'oval') {
       applyToClippedOval(workCanvas, snapshot, x, y, w, h, mode, params);
     }
+
+    rec.canvas.getContext('2d').clearRect(0, 0, rec.width, rec.height);
+    rec.canvas.getContext('2d').drawImage(workCanvas, 0, 0);
 
     state.activeShape = null;
     clearOverlay();
@@ -559,13 +576,16 @@ export function initImageApp() {
   let brushLastPt = null;
 
   canvasStage?.addEventListener('pointerdown', (e) => {
+    // If the click/tap is on or inside the floating action bar buttons, let it handle the event cleanly
+    if (actionContainer && actionContainer.contains(e.target)) return;
+
     const rec = activeRecord();
     if (!rec) return;
 
     const pt = getCanvasPoint(e, workCanvas);
 
     if (state.activeShape) {
-      const handle = getHandleAtPoint(pt.x, pt.y, state.activeShape, state.zoom);
+      const handle = getHandleAtPoint(pt, state.activeShape, state.zoom);
       if (handle) {
         state.dragHandle = handle;
         state.dragStartPt = pt;
@@ -728,6 +748,43 @@ export function initImageApp() {
         canvasStage.scrollLeft -= dx;
         canvasStage.scrollTop -= dy;
       }
+    }
+  });
+
+  // Keyboard Shortcuts (Enter to confirm, Escape/Delete to cancel, Cmd+Z/Y for undo/redo)
+  window.addEventListener('keydown', (e) => {
+    const isInput = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
+    if (isInput) return;
+
+    const imageView = document.getElementById('image-view');
+    if (imageView && imageView.classList.contains('hidden')) return;
+
+    if (state.activeShape) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitActiveShape();
+        return;
+      }
+      if (e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault();
+        discardActiveShape();
+        return;
+      }
+    }
+
+    const isMac = typeof navigator !== 'undefined' && navigator.platform && navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    const isCmdOrCtrl = isMac ? e.metaKey : e.ctrlKey;
+
+    if (isCmdOrCtrl && e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        redoBtn?.click();
+      } else {
+        undoBtn?.click();
+      }
+    } else if (isCmdOrCtrl && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      redoBtn?.click();
     }
   });
 
